@@ -402,7 +402,28 @@ with st.sidebar:
     
     # Load data
     df, filepath = load_data(device_type)
-     
+             
+    if df is not None:
+        st.markdown("### 📊 Dataset Info")
+        st.metric("Total Products", f"{df['product_key'].nunique():,}")
+        st.metric("Data Points", f"{len(df):,}")
+        
+        last_update = df['date'].max()
+        st.markdown(f"**Last Updated:** {last_update.strftime('%b %d, %Y')}")
+    
+    st.markdown("---")
+    st.markdown("### ℹ️ About")
+    st.markdown(f"""
+    Currently showing: **{device_type}**
+    
+    Data file: `{filepath}`
+    
+    Model: **Global Linear Regression**
+    """)
+
+if df is None:
+    st.stop()
+
 # ═══════════════════════════════════════════════════════════
 # 📊 MARKET INSIGHTS (PRICE MOVEMENTS)
 # ═══════════════════════════════════════════════════════════
@@ -472,28 +493,6 @@ if df is not None and len(df) > 0:
             )
         else:
             st.info("No decrease data available")
-             
-    if df is not None:
-        st.markdown("### 📊 Dataset Info")
-        st.metric("Total Products", f"{df['product_key'].nunique():,}")
-        st.metric("Data Points", f"{len(df):,}")
-        
-        last_update = df['date'].max()
-        st.markdown(f"**Last Updated:** {last_update.strftime('%b %d, %Y')}")
-    
-    st.markdown("---")
-    st.markdown("### ℹ️ About")
-    st.markdown(f"""
-    Currently showing: **{device_type}**
-    
-    Data file: `{filepath}`
-    
-    Model: **Global Linear Regression**
-    """)
-
-if df is None:
-    st.stop()
-
 # ═══════════════════════════════════════════════════════════
 # FILTERS
 # ═══════════════════════════════════════════════════════════
