@@ -5,6 +5,56 @@ import plotly.graph_objects as go
 from datetime import timedelta
 import os
 
+from supabase import create_client
+
+SUPABASE_URL = "https://ryiqzurrmvaftbnpiopx.supabase.co"
+SUPABASE_KEY = "sb_publishable_b7_MsHFtjFmSRbS5Ek_y6w_9QaWtM4x"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+@st.cache_data(ttl=600)
+def load_data_from_db(device_type):
+     try:
+
+        if device_type == "Tablets":
+            table = "tablets_prices"
+        else:
+            table = "mobile_prices"
+
+        response = supabase.table(table).select("*").execute()
+
+        if response.data:
+            df = pd.DataFrame(response.data)
+
+            # Convert timestamp
+            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+            # Create date column expected by model
+            df["date"] = df["timestamp"].dt.date
+            df["date"] = pd.to_datetime(df["date"])
+
+            # Clean price column
+            df["price"] = df["price"].astype(str)
+            df["price"] = df["price"].str.replace("EGP", "", regex=False)
+            df["price"] = df["price"].str.replace(",", "", regex=False)
+            df["price"] = pd.to_numeric(df["price"], errors="coerce")
+
+            # Product key
+            df["product_key"] = (
+                df["name"].str.lower().str.strip() + " " +
+                df["website"].str.lower() + " " +
+                df["ram_gb"].astype(str) + " " +
+                df["storage_gb"].astype(str)
+            )
+
+            return df
+
+        return None
+
+    except Exception as e:
+        st.sidebar.warning(f"Database connection failed: {str(e)}")
+        return None
+
 # ═══════════════════════════════════════════════════════════
 # PAGE CONFIG
 # ═══════════════════════════════════════════════════════════
