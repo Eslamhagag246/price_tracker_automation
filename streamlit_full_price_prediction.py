@@ -402,7 +402,77 @@ with st.sidebar:
     
     # Load data
     df, filepath = load_data(device_type)
-    
+     
+# ═══════════════════════════════════════════════════════════
+# 📊 MARKET INSIGHTS (PRICE MOVEMENTS)
+# ═══════════════════════════════════════════════════════════
+
+st.markdown("## 📊 Market Insights")
+
+def generate_market_insights(df):
+
+    insights_df = df.copy()
+
+    # Sort by product & date
+    insights_df = insights_df.sort_values(['product_key', 'date'])
+
+    # Get last 2 prices for each product
+    insights_df['prev_price'] = insights_df.groupby('product_key')['price'].shift(1)
+
+    # Price change
+    insights_df['price_change'] = insights_df['price'] - insights_df['prev_price']
+    insights_df['pct_change'] = (insights_df['price_change'] / insights_df['prev_price']) * 100
+
+    # Keep only latest record per product
+    latest = insights_df.groupby('product_key').tail(1)
+
+    latest = latest.dropna(subset=['pct_change'])
+
+    # Top movers
+    top_increase = latest.sort_values('pct_change', ascending=False).head(5)
+    top_decrease = latest.sort_values('pct_change', ascending=True).head(5)
+
+    return top_increase, top_decrease
+
+
+if df is not None and len(df) > 0:
+
+    top_up, top_down = generate_market_insights(df)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 📈 Top Price Increases")
+        if len(top_up) > 0:
+            st.dataframe(
+                top_up[['name', 'brand', 'price', 'pct_change']]
+                .rename(columns={
+                    'name': 'Product',
+                    'brand': 'Brand',
+                    'price': 'Current Price',
+                    'pct_change': '% Change'
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("No increase data available")
+
+    with col2:
+        st.markdown("### 📉 Top Price Drops")
+        if len(top_down) > 0:
+            st.dataframe(
+                top_down[['name', 'brand', 'price', 'pct_change']]
+                .rename(columns={
+                    'name': 'Product',
+                    'brand': 'Brand',
+                    'price': 'Current Price',
+                    'pct_change': '% Change'
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("No decrease data available")
+             
     if df is not None:
         st.markdown("### 📊 Dataset Info")
         st.metric("Total Products", f"{df['product_key'].nunique():,}")
