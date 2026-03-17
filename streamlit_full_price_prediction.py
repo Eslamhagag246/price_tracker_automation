@@ -363,7 +363,63 @@ def create_forecast_chart(result, device_type):
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#f7fafc')
     
     return fig
+# ═══════════════════════════════════════════════════════════
+# 🧠 BUY / WAIT RECOMMENDATION ENGINE
+# ═══════════════════════════════════════════════════════════
 
+st.markdown("## 🧠 Smart Recommendation")
+
+def generate_recommendation(pdf, forecast_prices):
+
+    current_price = pdf['price'].iloc[-1]
+    avg_price = pdf['price'].mean()
+
+    # Trend
+    rolling_mean = pdf['price'].rolling(3, min_periods=1).mean().iloc[-1]
+
+    # Forecast trend
+    future_avg = np.mean(forecast_prices)
+
+    # Volatility
+    volatility = pdf['price'].rolling(5, min_periods=2).std().iloc[-1]
+    volatility = 0 if pd.isna(volatility) else volatility
+
+    # Decision logic
+    if current_price < rolling_mean and future_avg > current_price:
+        decision = "🟢 BUY NOW"
+        reason = "Price is below trend and expected to increase"
+
+    elif current_price > rolling_mean and future_avg < current_price:
+        decision = "🔴 WAIT"
+        reason = "Price is above trend and expected to drop"
+
+    elif volatility > 1000:
+        decision = "⚠️ RISKY"
+        reason = "High price volatility"
+
+    else:
+        decision = "🟡 HOLD"
+        reason = "Stable price, no strong signal"
+
+    return decision, reason, current_price, avg_price, volatility
+
+
+# APPLY ON SELECTED PRODUCT
+if 'selected_product_df' in locals() and forecast_result:
+
+    decision, reason, current_price, avg_price, volatility = generate_recommendation(
+        selected_product_df,
+        forecast_result['forecast_prices']
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Current Price", f"{current_price:,.0f} EGP")
+    col2.metric("Average Price", f"{avg_price:,.0f} EGP")
+    col3.metric("Volatility", f"{volatility:,.0f}")
+
+    st.markdown(f"### {decision}")
+    st.info(reason)
 
 # ═══════════════════════════════════════════════════════════
 # MAIN APP
@@ -423,7 +479,98 @@ with st.sidebar:
 
 if df is None:
     st.stop()
+# ═══════════════════════════════════════════════════════════
+# 📊 MARKET INSIGHTS (ROBUST VERSION)
+# ═══════════════════════════════════════════════════════════
 
+st.markdown("## 📊 Market Insights")
+
+def generate_market_insights(df):
+
+    temp = df.copy()
+    temp = temp.sort_values(['product_key', 'date'])
+
+    # Rolling average (more stable than single previous value)
+    temp['rolling_avg_3'] = temp.groupby('product_key')['price'].transform(
+        lambda x: x.rolling(3, min_periods=1).mean()
+    )
+
+    # Deviation from recent trend
+    temp['trend_diff'] = temp['price'] - temp['rolling_avg_3']
+    temp['pct_vs_trend'] = (temp['trend_diff'] / temp['rolling_avg_3']) * 100
+
+    # Volatility (std)
+    temp['volatility'] = temp.groupby('product_key')['price'].transform(
+        lambda x: x.rolling(5, min_periods=2).std()
+    )
+
+    # Get latest record per product
+    latest = temp.groupby('product_key').tail(1)
+
+    latest = latest.replace([np.inf, -np.inf], np.nan)
+    latest = latest.dropna(subset=['pct_vs_trend'])
+
+    # Top movements
+    top_up = latest.sort_values('pct_vs_trend', ascending=False).head(5)
+    top_down = latest.sort_values('pct_vs_trend', ascending=True).head(5)
+    most_volatile = latest.sort_values('volatility', ascending=False).head(5)
+
+    return top_up, top_down, most_volatile
+
+
+if df is not None and len(df) > 0:
+
+    top_up, top_down, volatile = generate_market_insights(df)
+
+    col1, col2, col3 = st.columns(3)
+
+    # 📈 UP
+    with col1:
+        st.markdown("### 📈 Trending Up")
+        if len(top_up) > 0:
+            st.dataframe(
+                top_up[['name', 'price', 'pct_vs_trend']]
+                .rename(columns={
+                    'name': 'Product',
+                    'price': 'Price',
+                    'pct_vs_trend': '% Above Trend'
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("Not enough data")
+
+    # 📉 DOWN
+    with col2:
+        st.markdown("### 📉 Trending Down")
+        if len(top_down) > 0:
+            st.dataframe(
+                top_down[['name', 'price', 'pct_vs_trend']]
+                .rename(columns={
+                    'name': 'Product',
+                    'price': 'Price',
+                    'pct_vs_trend': '% Below Trend'
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("Not enough data")
+
+    # 🔥 VOLATILE
+    with col3:
+        st.markdown("### 🔥 Most Volatile")
+        if len(volatile) > 0:
+            st.dataframe(
+                volatile[['name', 'price', 'volatility']]
+                .rename(columns={
+                    'name': 'Product',
+                    'price': 'Price',
+                    'volatility': 'Volatility'
+                }),
+                use_container_width=True
+            )
+        else:
+            st.info("Not enough data")
 
 # ═══════════════════════════════════════════════════════════
 # FILTERS
